@@ -1,0 +1,12 @@
+# Generated outputs
+outputs/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Test cache
+.pytest_cache/
