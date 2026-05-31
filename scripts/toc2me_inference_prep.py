@@ -42,6 +42,26 @@ def normalize_minmax(arr: np.ndarray, vmin: float, vmax: float, clip: bool = Tru
     return 2.0 * (arr - vmin) / (vmax - vmin) - 1.0
 
 
+def build_well_map(velocity: np.ndarray) -> np.ndarray:
+    height, width = velocity.shape
+    x_wells = np.array([0, width // 2, width - 1])
+    x_full = np.arange(width)
+    well_map = np.empty_like(velocity, dtype=float)
+    for row in range(height):
+        well_map[row, :] = np.interp(x_full, x_wells, velocity[row, x_wells])
+    return well_map
+
+
+def compute_velocity_scale(velocity: np.ndarray, target_vmax: float, mode: str) -> float:
+    vmax_actual = float(np.max(velocity))
+    vmin_actual = float(np.min(velocity))
+    if mode == "map-max":
+        return target_vmax / vmax_actual
+    if mode == "map-min":
+        return 1500.0 / vmin_actual
+    raise ValueError("Unknown velocity scaling mode")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build inference tensors from observed traveltimes.")
     parser.add_argument("--curves", type=Path, default=DEFAULT_CURVES)
@@ -50,9 +70,12 @@ def main() -> None:
     parser.add_argument("--tt-max", type=float, default=0.66)
     parser.add_argument("--train-vmin", type=float, default=1500.0)
     parser.add_argument("--train-vmax", type=float, default=4500.0)
-    parser.add_argument("--vel-norm", choices=["train-clip", "data-minmax"], default="train-clip")
-    parser.add_argument("--smooth-sigma", type=float, default=2.0)
+    parser.add_argument("--vel-norm", choices=["train-noclip", "train-clip", "data-minmax"], default="train-noclip")
+    parser.add_argument("--scale-length", type=float, default=0.2, help="Length scale factor (e.g., 700/3500)")
+    parser.add_argument("--scale-vel-mode", choices=["map-max", "map-min"], default="map-max")
+    parser.add_argument("--smooth-sigma", type=float, default=5.0)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUTPUTS)
+    parser.add_argument("--out-sample", type=Path, default=None, help="Path for the torch sample output.")
     args = parser.parse_args()
 
     event_ids, grid_x, curves = load_curves(args.curves)
@@ -65,19 +88,31 @@ def main() -> None:
     velocity = np.load(args.velocity)
     if velocity.shape != (64, 64):
         raise ValueError("Velocity grid must be 64x64")
-    smooth_velocity = gaussian_filter(velocity, sigma=args.smooth_sigma)
+    vel_scale = compute_velocity_scale(velocity, args.train_vmax, args.scale_vel_mode)
+    velocity_scaled = velocity * vel_scale
+    well_map = build_well_map(velocity_scaled)
+    smooth_velocity = gaussian_filter(well_map, sigma=args.smooth_sigma)
+
+    tt_scale = args.scale_length / vel_scale
+    curves_min0 = curves_min0 * tt_scale
+    obs_tt_maps = np.tile(curves_min0[:, None, :], (1, depth_samples, 1))
+    gt_tt_maps = obs_tt_maps.copy()
 
     norm_gt_tt = normalize_minmax(gt_tt_maps, args.tt_min, args.tt_max, clip=True)
     norm_obs_tt = normalize_minmax(obs_tt_maps, args.tt_min, args.tt_max, clip=True)
 
-    if args.vel_norm == "train-clip":
-        norm_vel = normalize_minmax(velocity, args.train_vmin, args.train_vmax, clip=True)
+    if args.vel_norm == "train-noclip":
+        norm_vel = normalize_minmax(velocity_scaled, args.train_vmin, args.train_vmax, clip=False)
+        norm_smooth = normalize_minmax(smooth_velocity, args.train_vmin, args.train_vmax, clip=False)
+        vel_info = {"method": "train-noclip", "vmin": args.train_vmin, "vmax": args.train_vmax}
+    elif args.vel_norm == "train-clip":
+        norm_vel = normalize_minmax(velocity_scaled, args.train_vmin, args.train_vmax, clip=True)
         norm_smooth = normalize_minmax(smooth_velocity, args.train_vmin, args.train_vmax, clip=True)
         vel_info = {"method": "train-clip", "vmin": args.train_vmin, "vmax": args.train_vmax}
     else:
-        vmin = float(velocity.min())
-        vmax = float(velocity.max())
-        norm_vel = normalize_minmax(velocity, vmin, vmax, clip=False)
+        vmin = float(velocity_scaled.min())
+        vmax = float(velocity_scaled.max())
+        norm_vel = normalize_minmax(velocity_scaled, vmin, vmax, clip=False)
         norm_smooth = normalize_minmax(smooth_velocity, vmin, vmax, clip=False)
         vel_info = {"method": "data-minmax", "vmin": vmin, "vmax": vmax}
 
@@ -90,7 +125,7 @@ def main() -> None:
     np.save(args.out_dir / "inference_c1.npy", c1)
     np.save(args.out_dir / "inference_cond.npy", cond)
 
-    physical_stack = np.concatenate([gt_tt_maps, velocity[None, :, :]], axis=0)
+    physical_stack = np.concatenate([gt_tt_maps, velocity_scaled[None, :, :]], axis=0)
     np.save(args.out_dir / "inference_stack_physical_4x64x64.npy", physical_stack)
 
     normalized_stack = np.concatenate([norm_gt_tt, norm_vel[None, :, :]], axis=0)
@@ -102,6 +137,12 @@ def main() -> None:
         "tt_max": args.tt_max,
         "velocity_norm": vel_info,
         "smooth_sigma": args.smooth_sigma,
+        "velocity_scale": vel_scale,
+        "velocity_scale_mode": args.scale_vel_mode,
+        "velocity_max_actual": float(np.max(velocity)),
+        "velocity_max_scaled": float(np.max(velocity_scaled)),
+        "length_scale": args.scale_length,
+        "traveltime_scale": tt_scale,
     }
     (args.out_dir / "inference_metadata.json").write_text(json.dumps(meta, indent=2))
 
@@ -114,7 +155,9 @@ def main() -> None:
             "cond": torch.from_numpy(cond).float(),
             "event_ids": event_ids,
         }
-        torch.save(sample, args.out_dir / "inference_sample.pt")
+        out_sample = args.out_sample or (args.out_dir / "inference_sample.pt")
+        out_sample.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(sample, out_sample)
     except Exception:
         pass
 
