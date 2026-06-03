@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+title: "ToC2ME 2D Profile Toolkit"
+message: "If you use this repository, please cite the ToC2ME field program paper and the velocity model dataset."
+type: software
+authors:
+  - name: "ToC2ME contributors"
+repository-code: "https://github.com/ayratabd/TOC2ME_2D_Profile"
+keywords:
+  - microseismic
+  - travel-time
+  - fast marching
+  - skfmm
+  - ToC2ME
+  - geophysics
+references:
+  - type: article
+    title: "Induced seismicity characterization during hydraulic-fracture monitoring with a shallow-wellbore geophone array and broadband sensors"
+    authors:
+      - name: "Eaton, D. W."
+      - name: "Igonin, N."
+      - name: "Poulin, A."
+      - name: "Weir, R."
+      - name: "Zhang, H."
+      - name: "Pellegrino, S."
+      - name: "Rodriguez, G."
+    journal: "Seismological Research Letters"
+    year: 2018
+    volume: 89
+    issue: 5
+    pages: "1641-1651"
+    url: "https://pubs.geoscienceworld.org/ssa/srl/article/543218/induced-seismicity-characterization-during"
+  - type: dataset
+    title: "ToC2ME velocity model"
+    doi: "10.5281/zenodo.4574248"
+    url: "https://doi.org/10.5281/zenodo.4574248"

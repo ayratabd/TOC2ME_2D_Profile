@@ -40,11 +40,6 @@
   <li><b>data/ToC2MEVelModel.mat</b>: 1D velocity model (z, vp). Used by velocity-section and grid prep scripts.</li>
 </ul>
 
-<h3> Microseismic Training Dataset </h3>
-<ul>
-  <li><b>microset_tt_Vwell3_TTnorm_rand3br.py</b>: MicroseismicDataset for OpenFWI. Uses skfmm travel times from random sources and builds observed surface-pick maps plus velocity/well-map conditioning channels.</li>
-</ul>
-
 <h3> Outputs (examples) </h3>
 <ul>
   <li><b>outputs/profile_map.png</b>, <b>outputs/profile_summary.json</b>, <b>outputs/selected_*.csv</b></li>
@@ -75,6 +70,33 @@ python scripts/toc2me_inference_prep.py --vel-norm train-noclip
 LD_PRELOAD=/lib/x86_64-linux-gnu/libstdc++.so.6 python scripts/toc2me_compare_curves.py --residual-spline pchip
 </pre>
 
+<h3> Usage Examples </h3>
+<pre>
+# Export skfmm curves and build a named inference sample
+LD_PRELOAD=/lib/x86_64-linux-gnu/libstdc++.so.6 python scripts/toc2me_compare_curves.py \
+  --residual-spline none \
+  --out-curves outputs/traveltime_curves_64_skfmm.csv \
+  --out-curves-source skfmm
+
+python scripts/toc2me_inference_prep.py \
+  --vel-norm train-noclip \
+  --curves outputs/traveltime_curves_64_skfmm.csv \
+  --out-dir outputs/skfmm \
+  --out-sample outputs/inference_sample_skfmm.pt
+
+# Build east-5 station curves and inference sample
+python scripts/toc2me_64grid_picks.py \
+  --station-subset east5 \
+  --station-ids outputs/selected_event_picks_9stations.csv \
+  --out-dir outputs/east5
+
+python scripts/toc2me_inference_prep.py \
+  --vel-norm train-noclip \
+  --curves outputs/east5/traveltime_curves_64.csv \
+  --out-dir outputs/east5 \
+  --out-sample outputs/inference_sample_east5.pt
+</pre>
+
 <h3> Expected Outputs (with screenshots) </h3>
 <figure>
   <p><img src="docs/images/velocity_section_2d_zoomed.png" alt="Velocity section (zoomed)" width="500"></p>
@@ -103,6 +125,13 @@ LD_PRELOAD=/lib/x86_64-linux-gnu/libstdc++.so.6 python scripts/toc2me_compare_cu
   <li><b>skfmm import fails with libstdc++?</b> Use LD_PRELOAD with your system libstdc++.</li>
   <li><b>Where are outputs written?</b> By default to <b>outputs/</b>; override via <b>--out-dir</b>.</li>
   <li><b>No inference_sample.pt generated?</b> Install <b>torch</b> (optional dependency).</li>
+</ul>
+
+<h3> How to Cite </h3>
+<ul>
+  <li>ToC2ME field program: <a href="https://pubs.geoscienceworld.org/ssa/srl/article/543218/induced-seismicity-characterization-during">Eaton et al., 2018 (SRL)</a>.</li>
+  <li>Velocity model: <a href="https://doi.org/10.5281/zenodo.4574248">Zenodo 4574248</a>.</li>
+  <li>See <b>CITATION.cff</b> for copy-paste citation metadata.</li>
 </ul>
     
 <h2> The ToC2ME Field Program </h2>
