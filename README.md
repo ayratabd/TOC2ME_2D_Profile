@@ -1,4 +1,109 @@
 <body>
+
+<p>
+  <img src="https://img.shields.io/badge/python-3.x-blue" alt="Python">
+  <img src="https://img.shields.io/badge/status-research-informational" alt="Research status">
+  <img src="https://img.shields.io/badge/data-ToC2ME-4c1" alt="ToC2ME data">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+</p>
+
+<h2> Repository Utilities (Data Prep and Inference Inputs) </h2>
+
+<p>
+  <b>Short description:</b> End-to-end utilities to extract 2D profiles, build travel-time curves,
+  compare observations to skfmm, and prepare inference tensors for microseismic workflows.
+</p>
+
+<p>
+  This repository now includes a lightweight processing toolkit to build 2D profile inputs,
+  traveltime curves, and inference tensors. All scripts default to the <b>outputs/</b> folder
+  and can be redirected with <b>--out-dir</b> to keep variants side-by-side.
+</p>
+
+<p>
+  <b>Keywords:</b> microseismic, travel-time, fast marching, skfmm, ToC2ME, 2D profile, inversion, FWI
+</p>
+
+<h3> Scripts </h3>
+<ul>
+  <li><b>scripts/toc2me_profile.py</b>: select a dense 2D profile corridor, filter events/stations, and export picks.</li>
+  <li><b>scripts/toc2me_velocity_section.py</b>: plot the 2D velocity section (full and zoomed).</li>
+  <li><b>scripts/toc2me_64grid_picks.py</b>: build a 64x64 grid, choose 3 events, and interpolate traveltimes (supports east-5 station subset).</li>
+  <li><b>scripts/toc2me_compare_curves.py</b>: compare observed picks vs skfmm curves; optional residual-spline correction and CSV export.</li>
+  <li><b>scripts/toc2me_ddpm_prep.py</b>: build DDPM stacks (physical + normalized).</li>
+  <li><b>scripts/toc2me_inference_prep.py</b>: build inference tensors and torch samples (named outputs supported).</li>
+  <li><b>scripts/toc2me_top_view.py</b>: top-view map with stations/events, profile line, and east-5 profile selection.</li>
+</ul>
+
+<h3> Data Assets </h3>
+<ul>
+  <li><b>data/ToC2MEVelModel.mat</b>: 1D velocity model (z, vp). Used by velocity-section and grid prep scripts.</li>
+</ul>
+
+<h3> Microseismic Training Dataset </h3>
+<ul>
+  <li><b>microset_tt_Vwell3_TTnorm_rand3br.py</b>: MicroseismicDataset for OpenFWI. Uses skfmm travel times from random sources and builds observed surface-pick maps plus velocity/well-map conditioning channels.</li>
+</ul>
+
+<h3> Outputs (examples) </h3>
+<ul>
+  <li><b>outputs/profile_map.png</b>, <b>outputs/profile_summary.json</b>, <b>outputs/selected_*.csv</b></li>
+  <li><b>outputs/velocity_section_2d.png</b>, <b>outputs/velocity_section_2d_zoomed.png</b></li>
+  <li><b>outputs/velocity_model_64x64.npy</b>, <b>outputs/event_locations_64.csv</b></li>
+  <li><b>outputs/traveltime_curves_64.csv</b>, <b>outputs/compare_traveltime_curves.png</b>, optional residual/skfmm CSVs</li>
+  <li><b>outputs/stack_*.npy</b>, <b>outputs/inference_*.npy</b>, <b>outputs/inference_sample*.pt</b></li>
+  <li><b>outputs/profile_top_view*.png</b> (including east-5 variants)</li>
+</ul>
+
+<p>
+  Note: <b>skfmm</b> is required for curve comparison and synthetic TT generation. If you encounter
+  libstdc++ issues, preload the system library (e.g., <b>LD_PRELOAD=/lib/x86_64-linux-gnu/libstdc++.so.6</b>).
+</p>
+
+<h3> Quick Start </h3>
+<pre>
+python -m pip install -r requirements.txt
+python scripts/toc2me_profile.py --plot
+python scripts/toc2me_64grid_picks.py
+python scripts/toc2me_inference_prep.py --vel-norm train-noclip
+</pre>
+
+<p>
+  Optional curve comparison (requires skfmm):
+</p>
+<pre>
+LD_PRELOAD=/lib/x86_64-linux-gnu/libstdc++.so.6 python scripts/toc2me_compare_curves.py --residual-spline pchip
+</pre>
+
+<h3> Expected Outputs (with screenshots) </h3>
+<figure>
+  <p><img src="docs/images/velocity_section_2d_zoomed.png" alt="Velocity section (zoomed)" width="500"></p>
+  <figcaption>Velocity section (zoomed).</figcaption>
+</figure>
+
+<figure>
+  <p><img src="docs/images/compare_traveltime_curves.png" alt="Observed vs skfmm curves" width="500"></p>
+  <figcaption>Observed vs skfmm curves (with optional residual spline).</figcaption>
+</figure>
+
+<figure>
+  <p><img src="docs/images/profile_top_view_east5.png" alt="East-5 profile top view" width="500"></p>
+  <figcaption>Top view with east-5 profile selection and highlighted events.</figcaption>
+</figure>
+
+<h3> Results Summary (Example) </h3>
+<ul>
+  <li>Extracts a consistent 2D profile corridor with station/event filtering.</li>
+  <li>Generates 64-point travel-time curves and skfmm comparisons with residual-spline correction.</li>
+  <li>Prepares inference-ready tensors and torch samples with consistent normalization.</li>
+</ul>
+
+<h3> FAQ (Minimal) </h3>
+<ul>
+  <li><b>skfmm import fails with libstdc++?</b> Use LD_PRELOAD with your system libstdc++.</li>
+  <li><b>Where are outputs written?</b> By default to <b>outputs/</b>; override via <b>--out-dir</b>.</li>
+  <li><b>No inference_sample.pt generated?</b> Install <b>torch</b> (optional dependency).</li>
+</ul>
     
 <h2> The ToC2ME Field Program </h2>
 

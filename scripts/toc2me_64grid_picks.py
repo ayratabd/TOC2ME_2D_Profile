@@ -17,6 +17,7 @@ DEFAULT_OUTPUTS = REPO_ROOT / "outputs"
 DEFAULT_EVENTS = DEFAULT_OUTPUTS / "selected_events.csv"
 DEFAULT_STATIONS = DEFAULT_OUTPUTS / "selected_stations.csv"
 DEFAULT_PICKS = DEFAULT_OUTPUTS / "selected_picks_pp.csv"
+DEFAULT_STATION_IDS = DEFAULT_OUTPUTS / "selected_event_picks_9stations.csv"
 DEFAULT_VELOCITY_CSV = DEFAULT_OUTPUTS / "velocity_model_vp.csv"
 DEFAULT_VELOCITY_MAT = REPO_ROOT / "data" / "ToC2MEVelModel.mat"
 
@@ -41,6 +42,38 @@ def filter_events(events: pd.DataFrame, depth_max: float, exclude_deepest: int) 
     filtered = filtered.sort_values("depth_m", ascending=False).iloc[exclude_deepest:]
     filtered = filtered[filtered["depth_m"] <= depth_max]
     return filtered
+
+
+def load_station_ids(path: Path) -> list[int]:
+    if not path.exists():
+        raise FileNotFoundError(f"Station IDs file not found: {path}")
+    df = pd.read_csv(path)
+    if "station_id" not in df.columns:
+        raise ValueError("Station IDs file must contain a station_id column")
+    return sorted({int(v) for v in df["station_id"].dropna().unique().tolist()})
+
+
+def apply_station_subset(
+    stations: pd.DataFrame,
+    picks: pd.DataFrame,
+    subset: str,
+    station_ids_path: Path,
+    east_count: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[int]]:
+    if subset == "all":
+        return stations, picks, []
+
+    station_ids = load_station_ids(station_ids_path)
+    stations = stations[stations["station_id"].isin(station_ids)].copy()
+    if stations.empty:
+        raise ValueError("No stations remain after applying station_ids filter")
+
+    if subset == "east5":
+        stations = stations.sort_values("x_m", ascending=False).head(east_count).copy()
+        station_ids = stations["station_id"].astype(int).tolist()
+
+    picks = picks[picks["station_id"].isin(station_ids)].copy()
+    return stations, picks, station_ids
 
 
 def choose_square_window(events: pd.DataFrame, stations: pd.DataFrame, width_m: float, step_m: float) -> Tuple[float, float]:
@@ -125,6 +158,9 @@ def main() -> None:
     parser.add_argument("--events", type=Path, default=DEFAULT_EVENTS)
     parser.add_argument("--stations", type=Path, default=DEFAULT_STATIONS)
     parser.add_argument("--picks", type=Path, default=DEFAULT_PICKS)
+    parser.add_argument("--station-ids", type=Path, default=DEFAULT_STATION_IDS)
+    parser.add_argument("--station-subset", choices=["all", "east5"], default="all")
+    parser.add_argument("--east-count", type=int, default=5)
     parser.add_argument("--velocity-csv", type=Path, default=DEFAULT_VELOCITY_CSV)
     parser.add_argument("--velocity-mat", type=Path, default=DEFAULT_VELOCITY_MAT)
     parser.add_argument("--depth-max", type=float, default=3500.0)
@@ -136,6 +172,14 @@ def main() -> None:
     events = pd.read_csv(args.events)
     stations = pd.read_csv(args.stations)
     picks = pd.read_csv(args.picks)
+
+    stations, picks, station_subset_ids = apply_station_subset(
+        stations,
+        picks,
+        args.station_subset,
+        args.station_ids,
+        args.east_count,
+    )
 
     filtered = filter_events(events, args.depth_max, args.exclude_deepest)
     if filtered.empty:
@@ -241,6 +285,8 @@ def main() -> None:
         "dz_m": dz,
         "event_ids": event_df["event_id"].tolist(),
         "station_count": int(len(stations_win)),
+        "station_subset": args.station_subset,
+        "station_subset_ids": station_subset_ids,
     }
     (args.out_dir / "grid64_summary.json").write_text(json.dumps(summary, indent=2))
 
